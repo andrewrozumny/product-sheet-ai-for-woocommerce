@@ -74,8 +74,7 @@ final class Plugin {
 		( new Admin\AddFromSheetPage() )->register();
 		( new Ajax() )->register();
 		( new Frontend\Seo() )->register();
-
-		// Later phases register here: RequestLog.
+		( new RequestLog() )->register();
 	}
 
 	/**

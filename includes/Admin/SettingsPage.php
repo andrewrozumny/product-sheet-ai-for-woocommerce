@@ -9,6 +9,7 @@ declare(strict_types=1);
 
 namespace ProductSheetAI\Admin;
 
+use ProductSheetAI\RequestLog;
 use ProductSheetAI\Schema;
 use ProductSheetAI\Settings;
 
@@ -41,6 +42,28 @@ final class SettingsPage {
 		add_action( 'admin_menu', array( $this, 'add_menu' ) );
 		add_action( 'admin_init', array( $this, 'register_settings' ) );
 		add_action( 'admin_enqueue_scripts', array( $this, 'enqueue' ) );
+		add_action( 'admin_post_' . RequestLog::CLEAR_ACTION, array( $this, 'handle_clear_log' ) );
+	}
+
+	/**
+	 * Clear the request log (admin-post).
+	 */
+	public function handle_clear_log(): void {
+		if ( ! current_user_can( 'manage_woocommerce' ) ) {
+			wp_die( esc_html__( 'You are not allowed to do this.', 'product-sheet-ai-for-woocommerce' ), '', array( 'response' => 403 ) );
+		}
+		check_admin_referer( RequestLog::CLEAR_ACTION );
+		RequestLog::clear();
+		wp_safe_redirect(
+			add_query_arg(
+				array(
+					'tab'     => 'log',
+					'cleared' => '1',
+				),
+				admin_url( 'admin.php?page=' . self::SLUG )
+			)
+		);
+		exit;
 	}
 
 	/**
@@ -168,10 +191,122 @@ final class SettingsPage {
 	}
 
 	/**
-	 * Request log tab. The log itself is filled in by the request log feature.
+	 * Request log tab.
 	 */
 	public function render_log_tab(): void {
-		echo '<p>' . esc_html__( 'No requests yet.', 'product-sheet-ai-for-woocommerce' ) . '</p>';
+		// Read-only flag set by our own redirect, no state change.
+		if ( isset( $_GET['cleared'] ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Recommended
+			echo '<div class="notice notice-success is-dismissible"><p>' . esc_html__( 'The request log was cleared.', 'product-sheet-ai-for-woocommerce' ) . '</p></div>';
+		}
+		$entries = RequestLog::entries();
+		if ( array() === $entries ) {
+			echo '<p>' . esc_html__( 'No requests yet.', 'product-sheet-ai-for-woocommerce' ) . '</p>';
+			return;
+		}
+
+		echo '<table class="widefat striped product-sheet-ai-log"><thead><tr>';
+		$heads = array(
+			__( 'When', 'product-sheet-ai-for-woocommerce' ),
+			__( 'User', 'product-sheet-ai-for-woocommerce' ),
+			__( 'Product', 'product-sheet-ai-for-woocommerce' ),
+			__( 'Provider / model', 'product-sheet-ai-for-woocommerce' ),
+			__( 'Tokens in / out', 'product-sheet-ai-for-woocommerce' ),
+			__( 'Approx. cost', 'product-sheet-ai-for-woocommerce' ),
+			__( 'Status', 'product-sheet-ai-for-woocommerce' ),
+			__( 'Time', 'product-sheet-ai-for-woocommerce' ),
+		);
+		foreach ( $heads as $head ) {
+			echo '<th scope="col">' . esc_html( $head ) . '</th>';
+		}
+		echo '</tr></thead><tbody>';
+		foreach ( $entries as $entry ) {
+			$this->render_log_row( $entry );
+		}
+		echo '</tbody></table>';
+
+		echo '<p class="description">' . esc_html__( "Cost is an estimate from the provider's list prices. Your provider's invoice is the source of truth.", 'product-sheet-ai-for-woocommerce' ) . '</p>';
+
+		printf(
+			'<form method="post" action="%s">',
+			esc_url( admin_url( 'admin-post.php' ) )
+		);
+		printf( '<input type="hidden" name="action" value="%s" />', esc_attr( RequestLog::CLEAR_ACTION ) );
+		wp_nonce_field( RequestLog::CLEAR_ACTION );
+		submit_button( __( 'Clear log', 'product-sheet-ai-for-woocommerce' ), 'secondary', 'submit', false );
+		echo '</form>';
+	}
+
+	/**
+	 * One row of the log table.
+	 *
+	 * @param array<string,mixed> $entry Log entry.
+	 */
+	private function render_log_row( array $entry ): void {
+		$time     = isset( $entry['time'] ) && is_numeric( $entry['time'] ) ? (int) $entry['time'] : 0;
+		$user_id  = isset( $entry['user_id'] ) && is_numeric( $entry['user_id'] ) ? (int) $entry['user_id'] : 0;
+		$product  = isset( $entry['product_id'] ) && is_numeric( $entry['product_id'] ) ? (int) $entry['product_id'] : 0;
+		$user     = $user_id > 0 ? get_userdata( $user_id ) : false;
+		$cost     = isset( $entry['cost_usd'] ) && is_numeric( $entry['cost_usd'] ) ? (float) $entry['cost_usd'] : null;
+		$status   = isset( $entry['status'] ) && is_string( $entry['status'] ) ? $entry['status'] : 'internal';
+		$ms       = isset( $entry['duration_ms'] ) && is_numeric( $entry['duration_ms'] ) ? (int) $entry['duration_ms'] : 0;
+		$in       = isset( $entry['input_tokens'] ) && is_numeric( $entry['input_tokens'] ) ? (int) $entry['input_tokens'] : 0;
+		$out      = isset( $entry['output_tokens'] ) && is_numeric( $entry['output_tokens'] ) ? (int) $entry['output_tokens'] : 0;
+		$provider = isset( $entry['provider'] ) && is_string( $entry['provider'] ) ? $entry['provider'] : '';
+		$model    = isset( $entry['model'] ) && is_string( $entry['model'] ) ? $entry['model'] : '';
+
+		echo '<tr>';
+		$when = $time > 0 ? wp_date( get_option( 'date_format' ) . ' ' . get_option( 'time_format' ), $time ) : '';
+		echo '<td>' . esc_html( false === $when ? '' : $when ) . '</td>';
+		echo '<td>' . ( $user instanceof \WP_User ? esc_html( $user->display_name ) : '-' ) . '</td>';
+
+		echo '<td>';
+		if ( 0 === $product ) {
+			echo esc_html__( 'New draft', 'product-sheet-ai-for-woocommerce' );
+		} elseif ( 'product' === get_post_type( $product ) ) {
+			$title = get_the_title( $product );
+			printf(
+				'<a href="%1$s">%2$s</a>',
+				esc_url( (string) get_edit_post_link( $product, 'raw' ) ),
+				esc_html( '' !== $title ? $title : '#' . $product )
+			);
+		} else {
+			/* translators: %d: product ID. */
+			echo esc_html( sprintf( __( 'Product #%d (deleted)', 'product-sheet-ai-for-woocommerce' ), $product ) );
+		}
+		echo '</td>';
+
+		echo '<td>' . esc_html( trim( $provider . ' / ' . $model, ' /' ) ) . '</td>';
+		echo '<td>' . esc_html( number_format_i18n( $in ) . ' / ' . number_format_i18n( $out ) ) . '</td>';
+		echo '<td>' . esc_html( null === $cost ? __( 'unknown', 'product-sheet-ai-for-woocommerce' ) : '$' . number_format_i18n( $cost, 4 ) ) . '</td>';
+		echo '<td>' . esc_html( self::status_label( $status ) ) . '</td>';
+		echo '<td>' . esc_html( number_format_i18n( $ms / 1000, 1 ) . ' s' ) . '</td>';
+		echo '</tr>';
+	}
+
+	/**
+	 * Readable label for a log status.
+	 *
+	 * @param string $status 'ok', a provider or parser error code, or 'internal'.
+	 */
+	public static function status_label( string $status ): string {
+		$labels = array(
+			'ok'          => __( 'OK', 'product-sheet-ai-for-woocommerce' ),
+			'no_key'      => __( 'No API key', 'product-sheet-ai-for-woocommerce' ),
+			'auth'        => __( 'Key not accepted', 'product-sheet-ai-for-woocommerce' ),
+			'permission'  => __( 'Not permitted', 'product-sheet-ai-for-woocommerce' ),
+			'rate_limit'  => __( 'Rate limited', 'product-sheet-ai-for-woocommerce' ),
+			'overloaded'  => __( 'Provider overloaded', 'product-sheet-ai-for-woocommerce' ),
+			'timeout'     => __( 'Timed out', 'product-sheet-ai-for-woocommerce' ),
+			'bad_request' => __( 'Request rejected', 'product-sheet-ai-for-woocommerce' ),
+			'too_large'   => __( 'Sheet too large', 'product-sheet-ai-for-woocommerce' ),
+			'refusal'     => __( 'Model declined', 'product-sheet-ai-for-woocommerce' ),
+			'truncated'   => __( 'Answer cut off', 'product-sheet-ai-for-woocommerce' ),
+			'http'        => __( 'Connection error', 'product-sheet-ai-for-woocommerce' ),
+			'empty'       => __( 'Empty answer', 'product-sheet-ai-for-woocommerce' ),
+			'schema'      => __( 'Unreadable answer', 'product-sheet-ai-for-woocommerce' ),
+			'internal'    => __( 'Internal error', 'product-sheet-ai-for-woocommerce' ),
+		);
+		return $labels[ $status ] ?? __( 'Error', 'product-sheet-ai-for-woocommerce' );
 	}
 
 	/**

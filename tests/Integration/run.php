@@ -186,7 +186,20 @@ foreach ( $psai_taxonomies as $psai_taxonomy ) {
 }
 $psai_before_attributes = $psai_attribute_names();
 
-$psai_sweep_products = static function () use ( $psai_delete_product ): int {
+// Products and the request log that existed before this run are left alone.
+$psai_log_before  = get_option( 'product_sheet_ai_log', null );
+$psai_preexisting = get_posts(
+	array(
+		'post_type'   => 'product',
+		'post_status' => 'any',
+		'numberposts' => -1,
+		'fields'      => 'ids',
+		's'           => 'PSAI',
+	)
+);
+$psai_preexisting = array_map( 'intval', $psai_preexisting );
+
+$psai_sweep_products = static function () use ( $psai_delete_product, $psai_preexisting ): int {
 	$found = get_posts(
 		array(
 			'post_type'   => 'product',
@@ -198,7 +211,7 @@ $psai_sweep_products = static function () use ( $psai_delete_product ): int {
 	);
 	$count = 0;
 	foreach ( $found as $id ) {
-		if ( 0 === strpos( (string) get_the_title( (int) $id ), 'PSAI ' ) ) {
+		if ( ! in_array( (int) $id, $psai_preexisting, true ) && 0 === strpos( (string) get_the_title( (int) $id ), 'PSAI ' ) ) {
 			$psai_delete_product( (int) $id );
 			++$count;
 		}
@@ -213,6 +226,9 @@ $psai_sweep_products = static function () use ( $psai_delete_product ): int {
 		)
 	);
 	foreach ( $variations as $id ) {
+		if ( in_array( (int) wp_get_post_parent_id( (int) $id ), $psai_preexisting, true ) ) {
+			continue;
+		}
 		wp_delete_post( (int) $id, true );
 		++$count;
 	}
@@ -560,7 +576,12 @@ try {
 	if ( $psai_before_attributes !== $psai_after_attributes ) {
 		throw new RuntimeException( 'Test attributes were left behind.' );
 	}
-	WP_CLI::log( 'PASS cleanup: products, terms and attributes removed' );
+	if ( null === $psai_log_before ) {
+		delete_option( 'product_sheet_ai_log' );
+	} else {
+		update_option( 'product_sheet_ai_log', $psai_log_before, false );
+	}
+	WP_CLI::log( 'PASS cleanup: products, terms, attributes and request log restored' );
 } catch ( Throwable $psai_error ) {
 	++$psai_failed;
 	WP_CLI::log( 'FAIL cleanup: ' . $psai_error->getMessage() );
