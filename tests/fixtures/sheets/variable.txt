@@ -1,0 +1,15 @@
+Supplier sheet
+Item: PSAI Organic Cotton T-Shirt
+Article prefix: PSAI-TEE
+100% organic cotton, unisex fit, pre-washed, 180 g/m2.
+Colours: Red, Blue, Purple
+Sizes: Small, Medium, Large, XL
+Price list (USD):
+Red / Small  24.00   PSAI-TEE-RED-S
+Red / Large  26.00   PSAI-TEE-RED-L
+Blue / Small  (base price 24.00)  PSAI-TEE-BLUE-S
+Blue / Medium  25.00, offer 20.00  PSAI-TEE-BLUE-M
+Purple / Medium  27.00, offer 30.00  PSAI-TEE-PURPLE-M
+Red / XL  28.00  PSAI-TEE-RED-XL
+Base price 24.00. Category: Clothing, Tshirts, Organic Basics
+Weight 0.25 kg

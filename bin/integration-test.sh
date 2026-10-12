@@ -22,6 +22,8 @@ if [ "$loaded" != "loaded" ]; then
 	exit 1
 fi
 echo "Integration: plugin loaded"
+# The scenarios mock the AI provider, short-circuit the settings with a fake key and clean up after themselves.
+$WP_CLI eval-file "wp-content/plugins/product-sheet-ai-for-woocommerce/tests/Integration/run.php"
 # --- End of scenarios --------------------------------------------------------
 
 # --- debug.log check (keep) --------------------------------------------------

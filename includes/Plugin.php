@@ -70,8 +70,12 @@ final class Plugin {
 		}
 
 		( new Admin\SettingsPage() )->register();
+		( new Admin\MetaBox() )->register();
+		( new Admin\AddFromSheetPage() )->register();
+		( new Ajax() )->register();
+		( new Frontend\Seo() )->register();
 
-		// Later phases register here: Admin\MetaBox, Admin\AddFromSheetPage, Ajax, Frontend\Seo, RequestLog.
+		// Later phases register here: RequestLog.
 	}
 
 	/**

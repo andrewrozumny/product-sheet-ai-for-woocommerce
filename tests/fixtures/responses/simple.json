@@ -1,0 +1,18 @@
+{
+  "id": "msg_psai_fixture",
+  "type": "message",
+  "role": "assistant",
+  "model": "claude-sonnet-5-5",
+  "content": [
+    {
+      "type": "text",
+      "text": "{\"sku\": \"PSAI-MUG-001\", \"weight\": \"0.4\", \"dimensions\": {\"length\": \"9\", \"width\": \"9\", \"height\": \"10\"}, \"categories\": [\"Decor\", \"PSAI Gift Mugs\"], \"tags\": [\"psai mug\", \"psai ceramic\"], \"attributes\": [], \"variations\": [], \"image_alts\": [], \"warnings\": [\"The sheet does not say which glaze is used.\"], \"regular_price\": \"12.50\", \"sale_price\": \"9.90\", \"product_type\": \"simple\", \"name\": \"PSAI Ceramic Mug 350 ml\", \"short_description\": \"<p>Hand glazed stoneware mug, holds 350 ml.</p>\", \"description\": \"<p>Hand glazed <strong>stoneware</strong> mug with a blue rim.</p><ul><li>Dishwasher safe</li><li>Microwave safe</li><li>Holds 350 ml</li></ul>\", \"seo_title\": \"Ceramic Mug 350 ml, hand glazed stoneware\", \"seo_description\": \"Hand glazed 350 ml stoneware mug with a blue rim. Dishwasher and microwave safe, packed in a gift box.\"}"
+    }
+  ],
+  "stop_reason": "end_turn",
+  "stop_sequence": null,
+  "usage": {
+    "input_tokens": 1480,
+    "output_tokens": 910
+  }
+}
